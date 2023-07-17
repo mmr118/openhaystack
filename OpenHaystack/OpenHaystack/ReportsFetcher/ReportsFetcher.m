@@ -26,12 +26,12 @@
 
     CFTypeRef item;
     OSStatus status = SecItemCopyMatching((__bridge CFDictionaryRef)query, &item);
-    
-    
+
+
     if (status == errSecSuccess) {
         NSData *securityToken = (__bridge NSData *)(item);
         CFRelease(item);
-        
+
         NSLog(@"Fetched token %@", [[NSString alloc] initWithData:securityToken encoding:NSUTF8StringEncoding]);
 
         if (securityToken.length == 0) {
@@ -82,7 +82,7 @@
     if (status == errSecSuccess) {
         NSDictionary *itemDict = (__bridge NSDictionary *)(item);
         CFRelease(item);
-        
+
         NSString *accountId = itemDict[(NSString *)kSecAttrAccount];
 
         return accountId;
@@ -117,7 +117,7 @@
 - (void)fetchAnisetteData:(void (^)(NSDictionary *_Nullable))completion {
     // Use the AltStore mail plugin
     [[AnisetteDataManager shared] requestAnisetteDataObjc:^(NSDictionary *_Nullable dict) {
-      completion(dict);
+        completion(dict);
     }];
 }
 
@@ -133,7 +133,7 @@
 
     NSLog(@"Requesting data for %@", publicKeys);
     NSDictionary *query =
-        @{@"search" : @[ @{@"endDate" : [NSString stringWithFormat:@"%lli", endDate], @"ids" : publicKeys, @"startDate" : [NSString stringWithFormat:@"%lli", startDate]} ]};
+    @{@"search" : @[ @{@"endDate" : [NSString stringWithFormat:@"%lli", endDate], @"ids" : publicKeys, @"startDate" : [NSString stringWithFormat:@"%lli", startDate]} ]};
     NSData *httpBody = [NSJSONSerialization dataWithJSONObject:query options:0 error:nil];
 
     NSLog(@"Query : %@", query);
@@ -143,36 +143,65 @@
     NSString *authValue = [self basicAuthForAppleID:appleId andToken:securityToken];
 
     [self fetchAnisetteData:^(NSDictionary *_Nullable dict) {
-      if (dict == nil) {
-          completion(nil);
-          return;
-      }
+        if (dict == nil) {
+            completion(nil);
+            return;
+        }
 
-      NSMutableURLRequest *req = [[NSMutableURLRequest alloc] initWithURL:[[NSURL alloc] initWithString:@"https://gateway.icloud.com/acsnservice/fetch"]];
+        NSMutableURLRequest *req = [[NSMutableURLRequest alloc] initWithURL:[[NSURL alloc] initWithString:@"https://gateway.icloud.com/acsnservice/fetch"]];
 
-      [req setHTTPMethod:@"POST"];
-      [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-      [req setValue:@"application/json" forHTTPHeaderField:@"Accept"];
-      [req setValue:authValue forHTTPHeaderField:authKey];
+        [req setHTTPMethod:@"POST"];
+        [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+        [req setValue:@"application/json" forHTTPHeaderField:@"Accept"];
+        [req setValue:authValue forHTTPHeaderField:authKey];
 
-      NSDictionary *appleHeadersDict = dict;
-      for (id key in appleHeadersDict)
-          [req setValue:[appleHeadersDict objectForKey:key] forHTTPHeaderField:key];
+        NSDictionary *appleHeadersDict = dict;
+        for (id key in appleHeadersDict)
+            [req setValue:[appleHeadersDict objectForKey:key] forHTTPHeaderField:key];
 
-      NSLog(@"Headers:\n%@", req.allHTTPHeaderFields);
+        NSLog(@"Headers:\n%@", req.allHTTPHeaderFields);
 
-      [req setHTTPBody:httpBody];
+        [req setHTTPBody:httpBody];
 
-      NSURLResponse *response;
-      NSError *error = nil;
-      NSData *data = [NSURLConnection sendSynchronousRequest:req returningResponse:&response error:&error];
+        // FIXME: - 'sendSynchronousRequest:returningResponse:error:' is deprecated
+        NSURLResponse *response;
+        NSError *error = nil;
+        NSData *data = [NSURLConnection sendSynchronousRequest:req returningResponse:&response error:&error];
+        if (error) {
+            NSLog(@"Error during request: \n\n%@", error);
+        }
 
-      if (error) {
-          NSLog(@"Error during request: \n\n%@", error);
-      }
+        completion(data);
+    }];
 
-      completion(data);
+}
+
+/// Possible fix for deprecated `sendSynchronousRequest:returningResponse:error:`. Currently not implemented.
+///
+/// - TODO: Check if solution works
+///
+/// - Parameters:
+///   - request: The request to load.
+///   - completion: The completion handler to call when the load request is complete.
+///
+///
+/// - warning: The warning from **Xcode**:
+///
+/// `sendSynchronousRequest:returningResponse:error:' is deprecated:`
+///
+/// `   - first deprecated in macOS 10.11`
+///
+/// `   - Use [NSURLSession dataTaskWithRequest:completionHandler:] (see NSURLSession.h)`
+///
+- (void)FIX_sendSynchronousRequest:(NSURLRequest *)request completion:(void (^)(NSData *_Nullable))completion {
+    NSURLSession *session = [NSURLSession sharedSession];
+    [session dataTaskWithRequest:request completionHandler:^(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error) {
+        if (error) {
+            NSLog(@"Error during request: \n\n%@", error);
+        }
+        completion(data);
     }];
 }
 
 @end
+
